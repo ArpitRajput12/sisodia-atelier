@@ -1,0 +1,271 @@
+// ==============================================================================
+// SISODIA ATELIER ✧ - PRISMA SCHEMA FOR NEON POSTGRESQL
+// 100% Real Database Persistence (Nagina, India)
+// ==============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ------------------------------------------------------------------------------
+// ENUMS (PRESERVED FOR COMPATIBILITY)
+// ------------------------------------------------------------------------------
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  ARTISAN_CURATOR
+  VIP_PATRON
+  CLIENT
+}
+
+enum WoodSpecies {
+  ROYAL_SHEESHAM
+  BURMA_TEAK
+  INDIAN_ROSEWOOD
+  KASHMIR_WALNUT
+  MALABAR_SANDALWOOD
+  ACACIA_BABOOL
+  RECLAIMED_TEAK
+}
+
+enum CratingType {
+  CUSTOM_PLYWOOD_CRATE
+  WHITE_GLOVE_MUSEUM_CASE
+  REINFORCED_EXPORT_BOX
+}
+
+enum BespokeStatus {
+  INQUIRY_RECEIVED
+  CONCIERGE_REVIEW
+  DESIGN_CONSULTATION
+  ARTISAN_ESTIMATE
+  PATRON_APPROVED
+  IN_ATELIER_PRODUCTION
+  READY_FOR_EXPORT
+  DELIVERED
+  ARCHIVED
+}
+
+enum Currency {
+  USD
+  GBP
+  EUR
+  AED
+  INR
+  AUD
+  CAD
+  MXN
+}
+
+enum PaymentProvider {
+  STRIPE
+  PAYPAL
+  RAZORPAY
+  CONCIERGE_WIRE_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum OrderStatus {
+  ORDER_CONFIRMED
+  IN_CRAFTING
+  QUALITY_AND_CRATING
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+// ------------------------------------------------------------------------------
+// 1. PRODUCT MODEL
+// ------------------------------------------------------------------------------
+
+model Product {
+  id           String   @id @default(uuid())
+  name         String
+  subtitle     String?
+  description  String
+  category     String
+  room         String?
+  material     String?
+  dimensions   String?
+  weightKg     Decimal? @db.Decimal(10, 2)
+  basePriceINR Decimal  @db.Decimal(12, 2)
+  stock        Int      @default(1)
+  isFeatured   Boolean  @default(false)
+  imageUrl     String
+  galleryMedia String[] @default([])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+  @@index([isFeatured])
+}
+
+// ------------------------------------------------------------------------------
+// 2. ORDER MODEL
+// ------------------------------------------------------------------------------
+
+model Order {
+  id              String   @id @default(uuid())
+  orderNumber     String   @unique
+  customerName    String
+  customerEmail   String
+  customerPhone   String?
+  firmName        String?
+  gstOrTaxId      String?
+  shippingAddress String
+  city            String
+  postalCode      String
+  countryCode     String
+  countryName     String
+  currencyCode    String
+  currencySymbol  String
+  totalForeign    Decimal  @db.Decimal(12, 2)
+  totalINR        Decimal  @db.Decimal(12, 2)
+  paymentGateway  String   @default("STRIPE")
+  paymentStatus   String   @default("PAID")
+  stage           Int      @default(1)
+  trackingNumber  String?
+  courierPartner  String?
+  liveCheckpoint  String?
+  isCancelled     Boolean  @default(false)
+  cancelReason    String?
+  itemsJson       Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([orderNumber])
+  @@index([customerEmail])
+  @@index([stage])
+  @@index([isCancelled])
+}
+
+// ------------------------------------------------------------------------------
+// 3. INQUIRY MODEL (CONTACT / BULK_TRADE / MEETING_REQUEST / CUSTOM_ORDER)
+// ------------------------------------------------------------------------------
+
+model Inquiry {
+  id                String   @id @default(uuid())
+  type              String   @default("CONTACT") // CONTACT | BULK_TRADE | MEETING_REQUEST | CUSTOM_ORDER
+  customerName      String
+  customerEmail     String
+  customerPhone     String?
+  country           String?
+  subject           String?
+  message           String
+  preferredDateTime String?
+  status            String   @default("NEW")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ------------------------------------------------------------------------------
+// 4. SITE ASSET MODEL (PERMANENT BRAND ASSETS & CLOUDINARY MEDIA)
+// ------------------------------------------------------------------------------
+
+model SiteAsset {
+  id           String   @id @default(uuid())
+  key          String   @unique // 'brand_logo' | 'atelier_floor_video'
+  url          String
+  resourceType String   @default("image") // image | video
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([key])
+}
+
+// ------------------------------------------------------------------------------
+// 5. ATELIER DOCUMENTARY REEL MODEL
+// ------------------------------------------------------------------------------
+
+model Reel {
+  id            String   @id @default(cuid())
+  episodeNumber String
+  title         String
+  duration      String
+  description   String
+  videoUrl      String
+  thumbnailUrl  String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+// ------------------------------------------------------------------------------
+// 6. ATELIER USER / ADMIN MODEL
+// ------------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         UserRole @default(CLIENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([email])
+}
+
+// ------------------------------------------------------------------------------
+// 7. CUSTOMER MODEL (PATRONS & CLIENT ACCOUNTS)
+// ------------------------------------------------------------------------------
+
+model Customer {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String
+  avatarUrl       String?
+  countryCode     String   // Strictly one of the 11 approved territory codes (e.g. US, GB, EU, AU, etc.)
+  countryName     String
+  phone           String?
+  savedAddress    String?
+  savedCity       String?
+  savedPostalCode String?
+  firmName        String?
+  gstOrTaxId      String?
+  authProvider    String   @default("EMAIL_OTP") // 'GOOGLE' | 'EMAIL_OTP'
+  wishlistIds     String[] @default([])
+  cartJson        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([email])
+  @@index([countryCode])
+}
+
+// ------------------------------------------------------------------------------
+// 8. EMAIL OTP MODEL (VERIFICATION & PASSWORDLESS LOGIN)
+// ------------------------------------------------------------------------------
+
+model EmailOtp {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+}
